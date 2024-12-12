@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Vérité ou Conséquences</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+        }
+        body {
+            background-color: #f4f4f4;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+        #game-container {
+            width: 90%;
+            max-width: 400px;
+            background-color: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+            padding: 20px;
+            text-align: center;
+        }
+        .button {
+            width: 100%;
+            padding: 15px;
+            margin: 10px 0;
+            border: none;
+            border-radius: 8px;
+            color: white;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        #action-btn { background-color: #2ecc71; }
+        #verite-btn { background-color: #3498db; }
+        #passe-btn { background-color: #e74c3c; }
+        #termine-btn { background-color: #9b59b6; }
+
+        .player-info {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 20px;
+            font-weight: bold;
+        }
+        #timer {
+            font-size: 24px;
+            margin: 20px 0;
+            color: #34495e;
+        }
+        #challenge-area {
+            margin: 20px 0;
+        }
+        #challenge-type {
+            font-weight: bold;
+            font-size: 20px;
+            margin-bottom: 10px;
+        }
+        #challenge-text {
+            font-size: 18px;
+            margin-bottom: 15px;
+        }
+        #game-end-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.7);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .modal-content {
+            background-color: white;
+            padding: 30px;
+            border-radius: 15px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <div class="player-info">
+            <span>Joueur 1: <span id="player1-score">0</span> pts</span>
+            <span>Joueur 2: <span id="player2-score">0</span> pts</span>
+        </div>
+
+        <div id="timer">02:00</div>
+
+        <div id="selection-area">
+            <button id="action-btn" class="button">Action</button>
+            <button id="verite-btn" class="button">Vérité</button>
+        </div>
+        
+        <div id="challenge-area" style="display:none;">
+            <div id="challenge-type"></div>
+            <div id="challenge-text"></div>
+            <div id="challenge-buttons">
+                <button id="passe-btn" class="button">Je passe</button>
+                <button id="termine-btn" class="button">Terminé</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="game-end-modal">
+        <div class="modal-content">
+            <h2 id="winner-text">Joueur 1 a gagné !</h2>
+            <button onclick="resetGame()" class="button" style="background-color: #2ecc71;">Nouvelle partie</button>
+        </div>
+    </div>
+
+    <script>
+        // Base de données des défis
+        const challenges = {
+            action: [
+                "Faites une imitation de votre acteur préféré",
+                "Dansez sur une musique imaginaire pendant 30 secondes",
+                "Appelez un contact et chantez-lui une chanson",
+                "Faites un tour de la pièce en marchant comme un canard",
+                "Faites un selfie ridicule et montrez-le à tout le monde",
+                "Faites un stand-up comedy pendant 1 minute",
+                "Chantez une chanson en entier sans rire",
+                "Donnez un massage à un autre joueur",
+                "Faites un compliment sincère à chaque joueur",
+                "Appelez quelqu'un et parlez avec un accent bizarre"
+            ],
+            verite: [
+                "Quel est votre plus grand secret ?",
+                "Quelle est la chose la plus embarrassante qui vous soit jamais arrivée ?",
+                "Quel est votre plus grand regret ?",
+                "Avez-vous déjà menti à quelqu'un que vous aimez ?",
+                "Quel est votre plus grand fantasme ?",
+                "Racontez votre premier baiser",
+                "Quelle est la chose la plus folle que vous ayez faite ?",
+                "Avez-vous déjà trahi la confiance de quelqu'un ?",
+                "Quel est votre plus grand défaut ?",
+                "Quelle est la chose la plus dangereuse que vous ayez faite ?"
+            ]
+        };
+
+        // Sélection des éléments
+        const actionBtn = document.getElementById('action-btn');
+        const veriteBtn = document.getElementById('verite-btn');
+        const passeBtn = document.getElementById('passe-btn');
+        const termineBtn = document.getElementById('termine-btn');
+        const selectionArea = document.getElementById('selection-area');
+        const challengeArea = document.getElementById('challenge-area');
+        const challengeType = document.getElementById('challenge-type');
+        const challengeText = document.getElementById('challenge-text');
+        const timerDisplay = document.getElementById('timer');
+        const player1ScoreDisplay = document.getElementById('player1-score');
+        const player2ScoreDisplay = document.getElementById('player2-score');
+        const gameEndModal = document.getElementById('game-end-modal');
+        const winnerText = document.getElementById('winner-text');
+
+        // Variables de jeu
+        let currentPlayer = 1;
+        let player1Score = 0;
+        let player2Score = 0;
+        let timer;
+        let timeLeft;
+        let currentChallengeType;
+
+        // Fonction pour choisir un défi
+        function pickChallenge(type) {
+            const challengeList = challenges[type];
+            const randomIndex = Math.floor(Math.random() * challengeList.length);
+            
+            selectionArea.style.display = 'none';
+            challengeArea.style.display = 'block';
+            
+            currentChallengeType = type;
+            challengeType.textContent = type === 'action' ? 'Action' : 'Vérité';
+            challengeText.textContent = challengeList[randomIndex];
+
+            // Démarrer le timer
+            timeLeft = type === 'action' ? 120 : 60;
+            startTimer();
+        }
+
+        // Fonction du timer
+        function startTimer() {
+            clearInterval(timer);
+            timer = setInterval(() => {
+                const minutes = Math.floor(timeLeft / 60);
+                const seconds = timeLeft % 60;
+                timerDisplay.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+                
+                if (timeLeft <= 0) {
+                    clearInterval(timer);
+                    handleTimeOut();
+                }
+                timeLeft--;
+            }, 1000);
+        }
+
+        // Gestion du délai écoulé
+        function handleTimeOut() {
+            updateScore(0);
+            nextPlayer();
+        }
+
+        // Mettre à jour le score
+        function updateScore(points) {
+            if (currentPlayer === 1) {
+                player1Score += points;
+                player1ScoreDisplay.textContent = player1Score;
+                checkWinner(player1Score, 1);
+            } else {
+                player2Score += points;
+                player2ScoreDisplay.textContent = player2Score;
+                checkWinner(player2Score, 2);
+            }
+        }
+
+        // Vérifier si un joueur a gagné
+        function checkWinner(score, player) {
+            if (score >= 10) {
+                clearInterval(timer);
+                winnerText.textContent = `Joueur ${player} a gagné !`;
+                gameEndModal.style.display = 'flex';
+            }
+        }
+
+        // Passer au joueur suivant
+        function nextPlayer() {
+            currentPlayer = currentPlayer === 1 ? 2 : 1;
+            clearInterval(timer);
+            selectionArea.style.display = 'block';
+            challengeArea.style.display = 'none';
+            timerDisplay.textContent = '02:00';
+        }
+
+        // Réinitialiser le jeu
+        function resetGame() {
+            player1Score = 0;
+            player2Score = 0;
+            player1ScoreDisplay.textContent = '0';
+            player2ScoreDisplay.textContent = '0';
+            currentPlayer = 1;
+            gameEndModal.style.display = 'none';
+            selectionArea.style.display = 'block';
+            challengeArea.style.display = 'none';
+            timerDisplay.textContent = '02:00';
+            clearInterval(timer);
+        }
+
+        // Événements
+        actionBtn.addEventListener('click', () => pickChallenge('action'));
+        veriteBtn.addEventListener('click', () => pickChallenge('verite'));
+        
+        passeBtn.addEventListener('click', () => {
+            updateScore(0);
+            nextPlayer();
+        });
+        
+        termineBtn.addEventListener('click', () => {
+            clearInterval(timer);
+            updateScore(1);
+            nextPlayer();
+        });
+    </script>
+</body>
+</html>
